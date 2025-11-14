@@ -1,0 +1,59 @@
+baseURL = 'https://krishnancr.github.io/'
+languageCode = 'en-us'
+title = 'Krishnan Ramchandran'
+theme = 'PaperMod'
+
+[params]
+description = "Graphics Engineering Leader | Rendering & Ray Tracing | Bridging Research and Product Innovation"
+author = "Krishnan Ramchandran"
+ShowReadingTime = true
+ShowShareButtons = false
+ShowPostNavLinks = true
+ShowBreadCrumbs = true
+ShowCodeCopyButtons = true
+ShowWordCount = true
+defaultTheme = "auto"
+
+[params.profileMode]
+enabled = true
+title = "Krishnan Ramchandran"
+subtitle = "Graphics Engineering Leader | Rendering & Ray Tracing | Bridging Research and Product"
+# imageUrl = "profile.jpg" # Optional: add your profile picture
+# imageTitle = "Profile Picture"
+# imageWidth = 120
+# imageHeight = 120
+
+[[params.profileMode.buttons]]
+name = "Blog"
+url = "/posts/"
+
+[[params.profileMode.buttons]]
+name = "About"
+url = "/about/"
+
+[[params.socialIcons]]
+name = "linkedin"
+url = "https://www.linkedin.com/in/kcramachandran/"
+
+[[params.socialIcons]]
+name = "github"
+url = "https://github.com/krishnancr"
+
+[menu]
+[[menu.main]]
+name = "Home"
+url = "/"
+weight = 1
+
+[[menu.main]]
+name = "About"
+url = "/about/"
+weight = 2
+
+[[menu.main]]
+name = "Blog"
+url = "/posts/"
+weight = 3
+
+[outputs]
+home = ["HTML", "RSS", "JSON"]
