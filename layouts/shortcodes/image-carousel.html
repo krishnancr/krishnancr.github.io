@@ -1,0 +1,172 @@
+{{- $images := split (.Get 0) "," -}}
+{{- $captions := split (.Get 1) "|" -}}
+{{- $uid := replace (printf "%d" now.UnixNano) "-" "" -}}
+
+<style>
+.image-carousel {
+  position: relative;
+  max-width: 900px;
+  margin: 2rem auto;
+  text-align: center;
+}
+.carousel-image {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+.carousel-image:hover {
+  transform: scale(1.02);
+}
+.carousel-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.carousel-btn {
+  background: #333;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.carousel-btn:hover {
+  background: #555;
+}
+.carousel-indicator {
+  color: #666;
+  font-size: 0.9rem;
+}
+.carousel-caption {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  color: #666;
+}
+.lightbox {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.95);
+  align-items: center;
+  justify-content: center;
+}
+.lightbox.active {
+  display: flex;
+}
+.lightbox-content {
+  max-width: 95%;
+  max-height: 95%;
+  object-fit: contain;
+}
+.lightbox-close {
+  position: absolute;
+  top: 20px;
+  right: 40px;
+  color: white;
+  font-size: 40px;
+  font-weight: bold;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+.lightbox-close:hover {
+  color: #ccc;
+}
+</style>
+
+<div class="image-carousel" data-carousel-id="carousel_{{ $uid }}">
+  <img id="carouselImage_{{ $uid }}" class="carousel-image" src="{{ index $images 0 }}" alt="Scene comparison">
+  <p id="carouselCaption_{{ $uid }}" class="carousel-caption">{{ index $captions 0 }}</p>
+  <div class="carousel-controls">
+    <button class="carousel-btn carousel-prev">← Previous</button>
+    <span class="carousel-indicator" id="carouselIndicator_{{ $uid }}">1 / {{ len $images }}</span>
+    <button class="carousel-btn carousel-next">Next →</button>
+  </div>
+</div>
+
+<div id="lightbox_{{ $uid }}" class="lightbox">
+  <button class="lightbox-close">&times;</button>
+  <img id="lightboxImage_{{ $uid }}" class="lightbox-content" src="" alt="">
+</div>
+
+<script>
+(function() {
+  var uid = '{{ $uid }}';
+  var images = [
+    {{- range $i, $img := $images -}}
+    {{- $caption := index $captions $i -}}
+    { src: '{{ trim $img " " }}', caption: '{{ trim $caption " " }}' }{{ if ne $i (sub (len $images) 1) }},{{ end }}
+    {{- end -}}
+  ];
+  var currentIndex = 0;
+  
+  var carousel = document.querySelector('[data-carousel-id="carousel_' + uid + '"]');
+  var carouselImage = document.getElementById('carouselImage_' + uid);
+  var carouselCaption = document.getElementById('carouselCaption_' + uid);
+  var carouselIndicator = document.getElementById('carouselIndicator_' + uid);
+  var lightbox = document.getElementById('lightbox_' + uid);
+  var lightboxImage = document.getElementById('lightboxImage_' + uid);
+  var prevBtn = carousel.querySelector('.carousel-prev');
+  var nextBtn = carousel.querySelector('.carousel-next');
+  var closeBtn = lightbox.querySelector('.lightbox-close');
+
+  function updateCarousel() {
+    carouselImage.src = images[currentIndex].src;
+    carouselCaption.textContent = images[currentIndex].caption;
+    carouselIndicator.textContent = (currentIndex + 1) + ' / ' + images.length;
+  }
+
+  function nextImage() {
+    currentIndex = (currentIndex + 1) % images.length;
+    updateCarousel();
+  }
+
+  function previousImage() {
+    currentIndex = (currentIndex - 1 + images.length) % images.length;
+    updateCarousel();
+  }
+
+  function openLightbox() {
+    lightbox.classList.add('active');
+    lightboxImage.src = images[currentIndex].src;
+  }
+
+  function closeLightbox() {
+    lightbox.classList.remove('active');
+  }
+
+  // Event listeners
+  carouselImage.addEventListener('click', openLightbox);
+  prevBtn.addEventListener('click', previousImage);
+  nextBtn.addEventListener('click', nextImage);
+  closeBtn.addEventListener('click', closeLightbox);
+  lightbox.addEventListener('click', function(e) {
+    if (e.target === lightbox) closeLightbox();
+  });
+
+  // Keyboard navigation
+  document.addEventListener('keydown', function(e) {
+    if (lightbox.classList.contains('active')) {
+      if (e.key === 'Escape') {
+        closeLightbox();
+      } else if (e.key === 'ArrowLeft') {
+        previousImage();
+        lightboxImage.src = images[currentIndex].src;
+      } else if (e.key === 'ArrowRight') {
+        nextImage();
+        lightboxImage.src = images[currentIndex].src;
+      }
+    }
+  });
+})();
+</script>
