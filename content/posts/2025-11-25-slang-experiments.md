@@ -50,7 +50,7 @@ One deliberate decision at this stage was to avoid introducing Slang's Reflectio
 
 **Table: Unified Resource Binding Layout (DXR ↔ Vulkan)**
 
-| Resource | Vulkan (Set 0 Binding) | D X R (Register / Space 0) |
+| Resource | Vulkan (Set 0 Binding) | DXR (Register / Space 0) |
 |---|---:|---:|
 | TLAS | 0 | t0 |
 | Render Target | 1 | u0 |
