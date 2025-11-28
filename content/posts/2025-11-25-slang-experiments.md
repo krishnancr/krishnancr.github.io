@@ -136,5 +136,5 @@ While these results are promising, they represent only a starting point. These s
 - **Cross-hardware validation**: Test on other GPUs to establish whether these performance characteristics are universal or vendor-specific
 - **Metal portability**: Validate that the same cross-platform shader approach translates cleanly to Apple's Metal API, completing the portability story across all major platforms
 
-For teams building cross-platform rendering engines, this suggests Slang can reduce maintenance overhead without sacrificing performance. I feel confident enough to continue improving my fork of ChameleonRT with Slang as the sole shading language. I no longer need to maintain parallel HLSL paths and plan to evolve the project entirely within the Slang ecosystem going forward.
+I feel confident enough to continue improving my fork of ChameleonRT with Slang as the sole shading language. I no longer need to maintain parallel HLSL paths and plan to evolve the project entirely within the Slang ecosystem going forward.
 

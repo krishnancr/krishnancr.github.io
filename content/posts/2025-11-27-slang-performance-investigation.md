@@ -16,7 +16,7 @@ Shader systems are becoming a core architectural layer in modern rendering pipel
 
 In my [previous post](/posts/2025-11-25-slang-experiments/), I integrated Slang into ChameleonRT and benchmarked it against hand-written HLSL and GLSL shaders. The results were surprising: Slang showed an average **29.6% performance improvement on DXR** and modest gains on Vulkan. While I expected Slang to match native performance, I didn't expect it to significantly exceed it.
 
-These numbers were hard to believe. The results suggested that either I had made a mistake in my baseline implementation, or Slang's compiler was doing something fundamentally different—and better—than what I'd written by hand.
+These numbers were hard to believe. The results suggested that either I had made a mistake in my baseline implementation, or Slang's compiler was doing something fundamentally different (and better) than what I'd written by hand.
 
 I needed to understand what was happening. Was this a measurement artifact? A difference in compiler flags? Or was Slang genuinely generating more efficient code? I started investigating, focusing primarily on the DXR/HLSL path where the performance gap was most pronounced.
 
@@ -52,11 +52,11 @@ Next, I aligned optimization flags across all three paths: `-O3` for DXC, `-O --
 
 ### The First "Aha" Moment: `-enable-16bit-types`
 
-Something still wasn't matching up. I started digging through Slang's codebase and documentation to understand what compilation flags it was setting under the hood. That's when I found it—buried in the compiler's DXIL backend code, Slang automatically enables 16-bit type support when targeting Shader Model 6.2 or higher.
+Something still wasn't matching up. I started digging through Slang's codebase and documentation to understand what compilation flags it was setting under the hood. That's when I found it. Buried in the compiler's DXIL backend code, Slang automatically enables 16-bit type support when targeting Shader Model 6.2 or higher.
 
 This flag, `-enable-16bit-types`, enables native 8-bit and 16-bit type alignment. Without it, DXC conservatively pads smaller types to 32-bit boundaries, which wastes memory bandwidth and degrades cache efficiency. My native HLSL build wasn't using this flag at all.
 
-This seemed like the smoking gun. If this was the source of the 30% performance difference, then the comparison wasn't apples-to-apples—Slang was simply using a better default configuration. I immediately updated my native HLSL build:
+This seemed like the smoking gun. If this was the source of the 30% performance difference, then the comparison wasn't apples-to-apples. Slang was simply using a better default configuration. I immediately updated my native HLSL build:
 
 ```cmake
 COMPILE_OPTIONS -O3 -enable-16bit-types
@@ -70,7 +70,7 @@ If compiler flags weren't the issue, then the difference had to be in the code i
 
 ### Instruction Count Analysis
 
-I'll be honest—disassembling DXIL and analyzing instruction counts was well outside my usual comfort zone, but the performance gap was too significant to ignore, so I rolled up my sleeves and learned just enough to be dangerous.
+I'll be honest. Disassembling DXIL and analyzing instruction counts was well outside my usual comfort zone, but the performance gap was too significant to ignore, so I rolled up my sleeves and learned just enough to be dangerous.
 
 Using `dxc.exe -dumpbin` on both the native HLSL and Slang-generated DXIL files, I wrote some simple scripts to count specific instruction types. My assumption was that if Slang's backend was truly generating more efficient code, I should see fewer instructions in key categories.
 
@@ -152,13 +152,13 @@ float3 disney_microfacet_isotropic_0(DisneyMaterial_0 mat_5, float3 n_12,
 }
 ```
 
-At first glance, Slang's version looks more verbose with all those numbered temporaries (`_S96`, `_S97`, etc.). But as I studied it, I realized what was happening. These weren't arbitrary additions—they were deliberate optimizations. I had to look up what some of these techniques were called. Techniques like "common subexpression elimination" and "constant hoisting" weren't part of my daily vocabulary, but the principle was clear: Slang's frontend was recognizing optimization opportunities that I hadn't thought about when writing the code by hand, and DXC wasn't catching when compiling my HLSL.
+At first glance, Slang's version looks more verbose with all those numbered temporaries (`_S96`, `_S97`, etc.). But as I studied it, I realized what was happening. These weren't arbitrary additions. They were deliberate optimizations. I had to look up what some of these techniques were called. Techniques like "common subexpression elimination" and "constant hoisting" weren't part of my daily vocabulary, but the principle was clear: Slang's frontend was recognizing optimization opportunities that I hadn't thought about when writing the code by hand, and DXC wasn't catching when compiling my HLSL.
 
 The beauty of this approach is that these optimizations happen, *before* Slang even emits HLSL. When DXC compiles this pre-optimized code, it's already in a form that's easier to generate efficient machine code from.
 
 ### Where the Performance Actually Comes From
 
-The instruction count reductions mapped directly to the optimizations visible in the generated code—aggressive inlining, constant hoisting, CSE, and other optimizations all contributing to the reduction of arithmetic operations. The native HLSL→DXC path compiled my code as written; Slang's pipeline restructured it into a more efficient form before handing it to DXC. This explained the 30% DXR gap was not a measurement error or compiler flags, but optimization opportunities that required low level HLSL expertise. On Vulkan, improvements were more modest (5-10%) since glslc was likely already applying similar optimizations.
+The instruction count reductions mapped directly to the optimizations visible in the generated code. Aggressive inlining, constant hoisting, CSE, and other optimizations all contributed to the reduction of arithmetic operations. The native HLSL→DXC path compiled my code as written; Slang's pipeline restructured it into a more efficient form before handing it to DXC. This explained the 30% DXR gap was not a measurement error or compiler flags, but optimization opportunities that required low level HLSL expertise. On Vulkan, improvements were more modest (5-10%) since glslc was likely already applying similar optimizations.
 
 ## Validating the Theory with Real GPU Metrics
 
@@ -168,13 +168,13 @@ The NSight data validated everything I'd found in the DXIL analysis:
 
 | GPU Metric | Native HLSL | Slang | Analysis |
 |------------|------------:|------:|----------|
-| **L2 Cache Hit Rate** | 70.4% | 74.8% | **+6.2%** — Better memory efficiency |
-| **SM XU Pipe Throughput** | 36.3% | 15.3% | **-58%** — Far fewer address calculations |
-| **SM FMA Pipe Throughput** | 31.5% | 18.1% | **-43%** — Matches the 32% arithmetic reduction |
-| **Compute Warp Latency** | 538,420 cycles | 250,988 cycles | **-53%** — Warps retire much faster |
-| **MIO Throttle Stalls** | 0.3% | 0.1% | **-67%** — Less memory I/O contention |
+| **L2 Cache Hit Rate** | 70.4% | 74.8% | **+6.2%** (Better memory efficiency) |
+| **SM XU Pipe Throughput** | 36.3% | 15.3% | **-58%** (Far fewer address calculations) |
+| **SM FMA Pipe Throughput** | 31.5% | 18.1% | **-43%** (Matches the 32% arithmetic reduction) |
+| **Compute Warp Latency** | 538,420 cycles | 250,988 cycles | **-53%** (Warps retire much faster) |
+| **MIO Throttle Stalls** | 0.3% | 0.1% | **-67%** (Less memory I/O contention) |
 
-The correlation was remarkable. Every prediction from the instruction analysis appeared in the hardware metrics—32% fewer arithmetic ops matched the 43% FMA pipe reduction. Even L2 cache hit rates improved, likely from more compact code leaving more room for data.
+The correlation was remarkable. Every prediction from the instruction analysis appeared in the hardware metrics. The 32% fewer arithmetic ops matched the 43% FMA pipe reduction. Even L2 cache hit rates improved, likely from more compact code leaving more room for data.
 
 Vulkan showed a similar but more modest pattern, consistent with the 5-10% performance gain.
 
