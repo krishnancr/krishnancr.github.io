@@ -1,0 +1,128 @@
+/* Condensed Profile Section for Home Page */
+.profile-compact {
+    text-align: center;
+    padding: 60px 0 60px;
+    margin-bottom: 100px;
+    background: var(--entry);
+    border-radius: 8px;
+    position: relative;
+}
+
+.profile-compact::after {
+    content: '';
+    position: absolute;
+    bottom: -50px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--primary), transparent);
+}
+
+.profile-compact_inner h1 {
+    font-size: 32px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    line-height: 1.3;
+}
+
+.profile-compact .profile-tagline {
+    display: block;
+    color: var(--secondary);
+    font-size: 16px;
+    line-height: 1.5;
+    margin-bottom: 16px;
+}
+
+.profile-compact .social-icons {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    padding: 0;
+}
+
+.profile-compact .social-icons a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Recent Posts Section */
+.recent-posts-section {
+    max-width: 100%;
+    padding-top: 40px;
+}
+
+.recent-posts-section .section-header {
+    margin-bottom: 50px;
+    padding-bottom: 20px;
+    border-bottom: 3px solid var(--primary);
+    position: relative;
+}
+
+.recent-posts-section .section-header::before {
+    content: '━━━';
+    display: block;
+    font-size: 20px;
+    color: var(--tertiary);
+    margin-bottom: 10px;
+    letter-spacing: 8px;
+}
+
+.recent-posts-section .section-header h2 {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--primary);
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.recent-posts-section .post-entry {
+    margin-bottom: 30px;
+}
+
+/* View All Posts Link */
+.view-all-posts {
+    text-align: center;
+    margin-top: 40px;
+    padding-top: 30px;
+    border-top: 1px solid var(--border);
+}
+
+.view-all-link {
+    display: inline-block;
+    color: var(--primary);
+    font-size: 16px;
+    font-weight: 500;
+    padding: 10px 20px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.view-all-link:hover {
+    background: var(--tertiary);
+    border-color: var(--primary);
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 768px) {
+    .profile-compact {
+        padding: 30px 0 20px;
+        margin-bottom: 30px;
+    }
+
+    .profile-compact_inner h1 {
+        font-size: 26px;
+    }
+
+    .profile-compact .profile-tagline {
+        font-size: 14px;
+    }
+
+    .recent-posts-section .section-header h2 {
+        font-size: 20px;
+    }
+}

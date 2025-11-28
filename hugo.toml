@@ -13,6 +13,7 @@ ShowBreadCrumbs = true
 ShowCodeCopyButtons = true
 ShowWordCount = true
 defaultTheme = "auto"
+mainSections = ["posts"]
 
 [params.profileMode]
 enabled = true
