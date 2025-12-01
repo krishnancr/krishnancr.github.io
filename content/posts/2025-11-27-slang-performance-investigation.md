@@ -1,4 +1,4 @@
----
+﻿---
 title: "Why Is Slang ~30% Faster on DXR?"
 date: 2025-11-27T09:00:00Z
 draft: false
@@ -6,11 +6,11 @@ categories: [graphics, rendering, experiments]
 tags: [slang, shaders, performance, optimization]
 ---
 
-Shader systems are becoming a core architectural layer in modern rendering pipelines. After integrating Slang into ChameleonRT, the next natural question was identifying the root cause for performance gain. This post focuses on understanding the surprising performance differences I observed on DXR and why those differences matter for cross-platform engine design.
+After integrating Slang into ChameleonRT and seeing a ~30% speedup on DXR, I needed to know: was this real, or had I made a mistake in my baseline? This post documents that investigation.
 
 ## TL;DR
 
-**Why was Slang ~30% faster?** After eliminating compiler flags and configuration differences, I found the answer in the generated code. Slang's frontend applies optimizations before emitting HLSL. DXC then compiles this pre-optimized code. Native HLSL→DXC does not seem to do this, leaving performance on the table. NSight GPU profiling validated everything: 32% fewer instructions translated to 43% less FMA pipe usage. The speedup was real.
+**Why was Slang ~30% faster?** After eliminating compiler flags and configuration differences, I traced the improvement to the generated code. Slang's frontend applies optimizations like common subexpression elimination, constant hoisting, redundant load removal before emitting HLSL. DXC then compiles this pre-optimized code. The native HLSL→DXC path doesn't perform these transformations, leaving performance on the table. NSight profiling across multiple scenes confirmed the speedup was real and consistent.
 
 ## The Unexpected Performance Gap
 
@@ -48,21 +48,7 @@ This configuration ensured that Slang would generate HLSL or GLSL as an intermed
 
 ### Optimization Flag Parity
 
-Next, I aligned optimization flags across all three paths: `-O3` for DXC, `-O --target-env=vulkan1.2` for glslc, and `SLANG_OPTIMIZATION_LEVEL_HIGH` for Slang. I verified that all three were targeting the same shader models (DXR: `lib_6_6`, Vulkan: SPIR-V 1.5). With identical compilers, optimization levels, and target specifications, I expected the performance gap to disappear. It didn't.
-
-### The First "Aha" Moment: `-enable-16bit-types`
-
-Something still wasn't matching up. I started digging through Slang's codebase and documentation to understand what compilation flags it was setting under the hood. That's when I found it. Buried in the compiler's DXIL backend code, Slang automatically enables 16-bit type support when targeting Shader Model 6.2 or higher.
-
-This flag, `-enable-16bit-types`, enables native 8-bit and 16-bit type alignment. Without it, DXC conservatively pads smaller types to 32-bit boundaries, which wastes memory bandwidth and degrades cache efficiency. My native HLSL build wasn't using this flag at all.
-
-This seemed like the smoking gun. If this was the source of the 30% performance difference, then the comparison wasn't apples-to-apples. Slang was simply using a better default configuration. I immediately updated my native HLSL build:
-
-```cmake
-COMPILE_OPTIONS -O3 -enable-16bit-types
-```
-
-Rebuilt. Re-ran the benchmarks. **The performance gap remained.** The native HLSL build was still 30% slower than Slang, even with identical compiler flags. Whatever Slang was doing, it went deeper than just enabling modern type support.
+Next, I aligned optimization flags across all three paths: `-O3` for DXC, `-O --target-env=vulkan1.2` for glslc, and `SLANG_OPTIMIZATION_LEVEL_HIGH` for Slang. I verified that all three were targeting the same shader models (DXR: `lib_6_6`, Vulkan: SPIR-V 1.5). I also discovered that Slang automatically enables `-enable-16bit-types` for Shader Model 6.2+, so I added that to my native build as well. With identical compilers, optimization levels, and flags, I expected the performance gap to disappear. It didn't.
 
 ## Digging Deeper: Comparing the Generated Code
 
@@ -94,7 +80,7 @@ This is where things got interesting. Slang has a feature that lets you dump the
 
 I dumped the Slang→HLSL output and compared it side-by-side with my hand-written code. Here's what I found, using the Disney BRDF evaluation as an example (one of the hottest code paths in the ray tracer):
 
-**My hand-written HLSL:**
+**Hand-written HLSL:**
 ```hlsl
 float3 disney_microfacet_isotropic(in const DisneyMaterial mat, in const float3 n,
     in const float3 w_o, in const float3 w_i)
@@ -152,53 +138,64 @@ float3 disney_microfacet_isotropic_0(DisneyMaterial_0 mat_5, float3 n_12,
 }
 ```
 
-At first glance, Slang's version looks more verbose with all those numbered temporaries (`_S96`, `_S97`, etc.). But as I studied it, I realized what was happening. These weren't arbitrary additions. They were deliberate optimizations. I had to look up what some of these techniques were called. Techniques like "common subexpression elimination" and "constant hoisting" weren't part of my daily vocabulary, but the principle was clear: Slang's frontend was recognizing optimization opportunities that I hadn't thought about when writing the code by hand, and DXC wasn't catching when compiling my HLSL.
+At first glance, Slang's version looks more verbose with all those numbered temporaries (`_S96`, `_S97`, etc.). As I tried to understand why, I realized what was happening. These weren't arbitrary additions. They were deliberate optimizations. I had to look up what some of these techniques were called. Techniques like "common subexpression elimination" and "constant hoisting" weren't part of my daily vocabulary, but the principle was clear: Slang's frontend was recognizing optimization opportunities that I hadn't thought about when writing the code by hand, and DXC wasn't catching when compiling my HLSL.
 
-The beauty of this approach is that these optimizations happen, *before* Slang even emits HLSL. When DXC compiles this pre-optimized code, it's already in a form that's easier to generate efficient machine code from.
+The instruction count reductions mapped directly to these optimizations. The native HLSL→DXC path compiled my code as written; Slang restructured it first. On Vulkan, improvements were more modest (5-10%)—glslc likely already applies similar optimizations.
 
-### Where the Performance Actually Comes From
+## Validating with NSight GPU Profiling
 
-The instruction count reductions mapped directly to the optimizations visible in the generated code. Aggressive inlining, constant hoisting, CSE, and other optimizations all contributed to the reduction of arithmetic operations. The native HLSL→DXC path compiled my code as written; Slang's pipeline restructured it into a more efficient form before handing it to DXC. This explained the 30% DXR gap was not a measurement error or compiler flags, but optimization opportunities that required low level HLSL expertise. On Vulkan, improvements were more modest (5-10%) since glslc was likely already applying similar optimizations.
+The instruction count analysis was compelling, but I wanted GPU-level validation. I captured NSight traces across multiple scenes to see if the profiler data matched the benchmark results.
 
-## Validating the Theory with Real GPU Metrics
+### What NSight Showed
 
-The instruction count analysis was compelling, but I needed GPU-level validation. I captured NSight traces comparing native HLSL against Slang. If the instruction reductions were real, they should show up in execution unit utilization—fewer arithmetic ops should mean less FMA pipe pressure, fewer calls should reduce XU usage.
+| Scene | Version | Registers | Warp Occupancy | Frame Time |
+|-------|---------|----------:|---------------:|-----------:|
+| Cornell Box | Native HLSL | 118 | 29.2% | ~17 ms |
+| Cornell Box | Slang | 107 | 23.8% | ~12 ms |
+| San Miguel | Native HLSL | 118 | 29.5% | ~67 ms |
+| San Miguel | Slang | 107 | 29.0% | ~55 ms |
+| Rungholt | Native HLSL | 118 | 27.3% | ~36 ms |
+| Rungholt | Slang | 107 | 28.9% | ~23 ms |
 
-The NSight data validated everything I'd found in the DXIL analysis:
+*Frame times are approximate and include NSight overhead. The relative differences are what matter.*
 
-| GPU Metric | Native HLSL | Slang | Analysis |
-|------------|------------:|------:|----------|
-| **L2 Cache Hit Rate** | 70.4% | 74.8% | **+6.2%** (Better memory efficiency) |
-| **SM XU Pipe Throughput** | 36.3% | 15.3% | **-58%** (Far fewer address calculations) |
-| **SM FMA Pipe Throughput** | 31.5% | 18.1% | **-43%** (Matches the 32% arithmetic reduction) |
-| **Compute Warp Latency** | 538,420 cycles | 250,988 cycles | **-53%** (Warps retire much faster) |
-| **MIO Throttle Stalls** | 0.3% | 0.1% | **-67%** (Less memory I/O contention) |
+### Observations
 
-The correlation was remarkable. Every prediction from the instruction analysis appeared in the hardware metrics. The 32% fewer arithmetic ops matched the 43% FMA pipe reduction. Even L2 cache hit rates improved, likely from more compact code leaving more room for data.
+**Register counts are consistent.** The hottest shader uses 118 registers with native HLSL and 107 with Slang—an 11-register reduction that holds across all scenes.
 
-Vulkan showed a similar but more modest pattern, consistent with the 5-10% performance gain.
+**The performance improvement holds across scene complexity.** Frame time improvements range from ~18% (San Miguel) to ~36% (Rungholt), broadly consistent with the benchmark results from the previous post.
 
-These hardware-level measurements gave me the confidence I needed. The performance improvements weren't just artifacts of how I was counting instructions or quirks of the compiler output. They were real, measurable differences in how the GPU was executing the code.
+### The Limits of My Analysis
 
-{{< image-carousel "/images/DXR-No-Slang.png,/images/DXR-With-Slang.png" "DXR Without Slang|DXR With Slang" >}}
+I can see the *correlation* between Slang's optimizations and the speedup, but establishing precise *causation* requires deeper expertise than I have. For anyone who wants to dig deeper, I'd recommend Christoph Peters' [work on register pressure](https://momentsingraphics.de/GPUPolynomialRoots.html).
+
+{{< image-carousel "/images/DXR-No-Slang.png,/images/DXR-With-Slang.png,/images/SanMiguel-NoSlang.png,/images/SanMiguel-WithSlang.png,/images/RungHolt-NoSlang.png,/images/Rungholt-WithSlang.png" "Cornell Box: Native HLSL|Cornell Box: Slang|San Miguel: Native HLSL|San Miguel: Slang|Rungholt: Native HLSL|Rungholt: Slang" >}}
 
 ## Conclusions
 
-The investigation made the source of the performance difference clear: Slang’s multi-stage compilation pipeline restructures shader code before it ever reaches DXC or glslc. By applying canonical compiler optimizations early Slang hands the downstream compilers a more optimized starting point. The direct HLSL→DXC path simply never performs this level of optimizations. That answers the core technical question I set out to understand. For the purposes of building a cross-platform ray tracing testbed, the explanation is complete and actionable.
+The performance gap was real. After eliminating compiler flags and configuration as factors, the difference came down to code. Slang's frontend restructures shaders before downstream compilers ever see them, transformations those compilers probably aren't performing on their own.
 
-### What This Means for Teams and Engine Builders
+### What This Means in Practice
 
-The broader implication is that shader performance no longer has to be just a function of expert level handwritten code, it could be a function of the compiler you choose. For teams building cross-API engines:
+For teams evaluating shader languages:
 
-- **Automatic performance wins.** A capable shading language can surface meaningful gains without low-level shader micro-tuning.
-- **Cleaner, easier-to-maintain shaders.** Engineers can write clear code without worrying about low-level math restructuring or optimization tricks.
-- **Lower barrier to entry for shader authors.** Contributors don't need deep HLSL/GLSL micro-optimization expertise to produce performant code.
-- **Faster iteration and safer refactoring.** The compiler absorbs most optimization concerns, letting teams modify or extend shader logic without fear of hidden regressions.
+- **The speedup appears real and consistent** across the scenes I tested, though hardware and workload dependent.
+- **Cleaner shader code** becomes possible when the compiler handles micro-optimizations.
+- **The barrier to entry lowers** for shader authors who aren't HLSL optimization experts.
 
-### Final Takeaway
+### Limitations
 
-This work reinforced how much leverage a high-level shading language with a modern optimizing frontend can provide. Slang raises the floor on shader performance by automating a category of improvements that are tedious and error-prone to perform manually, and it does so without complicating authoring or portability.
+This analysis has important caveats:
 
-And notably, all of this comes before tapping into Slang’s differentiable programming capabilities—the feature that positions it for the next wave of neural and hybrid rendering techniques. Seeing this level of benefit purely from its core compilation path is a strong signal about the direction shader languages are heading and the kinds of systems worth building on.
+- **Single GPU tested.** All benchmarks ran on RTX 3070. Results may differ on other architectures.
+- **ChameleonRT-specific.** The workload is an iterative path tracer with specific characteristics (Disney BRDF, MIS, area lights). Production engines have different shader patterns.
+- **Correlation, not causation.** I've shown *what* changed (instruction counts, registers) and *that* performance improved, but I haven't proven the precise causal chain. That would require deeper profiling beyond my current expertise.
+- **DXR focus.** The Vulkan improvements were modest (5-10%). This investigation focused on the DXR path where the gap was largest.
 
+### Final Thoughts
 
+For my goal of building a cross-platform ray tracing testbed—Slang delivers meaningful performance gains with less manual optimization effort. Whether these results generalize to production engines with different shader patterns is a question I can't answer definitively. I'd encourage anyone interested to run their own benchmarks.
+
+## Acknowledgments
+
+Special thanks to Christoph Peters for detailed technical feedback on an earlier draft of this post. His expertise in GPU performance analysis helped identify gaps in my methodology and sharpen the presentation of results. Any remaining errors are my own.
