@@ -12,6 +12,10 @@ More recently, I've been exploring modern GPU programming models, shader portabi
 
 Thanks for stopping by.
 
+---
+
+*The views, experiments, and opinions expressed on this site are entirely my own and do not represent or reflect those of any employer, organization, or other entity.*
+
 ## Connect
 
 Feel free to connect with me on:
