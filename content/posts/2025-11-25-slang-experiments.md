@@ -1,5 +1,5 @@
 ---
-title: " Slang for Cross-Platform Ray Tracing: Results from my experiments"
+title: "Slang for Cross-Platform Ray Tracing: Results from my experiments"
 date: 2025-11-25T09:00:00Z
 draft: false
 categories: [graphics, rendering, experiments]
@@ -76,6 +76,17 @@ The language switch was seamless, and I now had a unified shader codebase compil
 
 ## Benchmarking and Early Findings
 
+### The Test Platform: ChameleonRT
+
+ChameleonRT is a minimal path tracer designed for comparing hardware ray tracing APIs. Understanding its architecture helps contextualize the benchmark results:
+
+- **Iterative Path Tracing**: All path bounces are handled in a single `RayGen` shader invocation via a loop. The `ClosestHit` shader returns hit data.
+- **Camera Model**: Pinhole camera with configurable samples per pixel.
+- **Material Model**: Disney BRDF supporting base color, metallic, roughness, specular, anisotropy, sheen, clearcoat, IOR, and transmission parameters.
+- **Lighting**: A single quad area light per scene, sampled using Multiple Importance Sampling (MIS) that combines light sampling and BRDF sampling strategies.
+- **No Any-Hit Shaders**: All geometry is fully opaque.
+- **Path Termination**: Maximum depth of 5 bounces, with Russian roulette applied after bounce 3.
+
 ### Hardware
 
 **Hardware / Drivers**
@@ -91,6 +102,16 @@ The language switch was seamless, and I now had a unified shader codebase compil
 | **DXR**: Shader Model `lib_6_6` • DXC (Win SDK 10.0.26100.0) with `-O3` |
 | **Vulkan**: Target: SPIR-V 1.5 • Compiler: glslc (Vulkan SDK 1.4.321.1) with `-O --target-env=vulkan1.2` |
 | **Slang**: Version: v2025.12.1 • Profiles: `lib_6_6` (DXIL), `spirv_1_5` (SPIR-V) • Optimization: `SLANG_OPTIMIZATION_LEVEL_HIGH` • SlangPassThrough set with the same DXC and GLSLC |
+
+### Timing Methodology
+
+All render times reported are **GPU-only execution time** measured using D3D12 timestamp queries (DXR) or Vulkan timestamp queries (Vulkan). These timestamps bracket only the `DispatchRays` call, excluding:
+
+- Shader compilation (performed at build time for native HLSL/GLSL, at application startup for Slang)
+- CPU overhead and command buffer recording
+- Memory transfers and readback operations
+
+This ensures we're measuring pure ray tracing compute performance, not pipeline setup or I/O.
 
 **Scenes Tested** 
 ( 1920×1080, 8 spp, 10 accumulation frames — each scene run 5× per backend)
@@ -137,4 +158,8 @@ While these results are promising, they represent only a starting point. These s
 - **Metal portability**: Validate that the same cross-platform shader approach translates cleanly to Apple's Metal API, completing the portability story across all major platforms
 
 I feel confident enough to continue improving my fork of ChameleonRT with Slang as the sole shading language. I no longer need to maintain parallel HLSL paths and plan to evolve the project entirely within the Slang ecosystem going forward.
+
+## Acknowledgments
+
+Thanks to [Christoph Peters](https://momentsingraphics.de/) for detailed technical feedback on GPU performance analysis methodology.
 
