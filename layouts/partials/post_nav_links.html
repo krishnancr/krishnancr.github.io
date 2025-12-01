@@ -1,20 +1,18 @@
 {{- $pages := where site.RegularPages "Type" "in" site.Params.mainSections }}
-
-{{- if (.Param "ShowPostNavLinks") }}
+{{- if and (gt (len $pages) 1) (in $pages . ) }}
 <nav class="paginav">
-  {{/* Use .Next for "Previous" (older) and .Prev for "Next" (newer) - swapped from default */}}
-  {{- with .Next }}
+  {{- with $pages.Prev . }}
   <a class="prev" href="{{ .Permalink }}">
-    <span class="title">« Prev</span>
+    <span class="title">« {{ i18n "prev_page" }}</span>
     <br>
-    <span>{{ .Title }}</span>
+    <span>{{- .Name -}}</span>
   </a>
   {{- end }}
-  {{- with .Prev }}
+  {{- with $pages.Next . }}
   <a class="next" href="{{ .Permalink }}">
-    <span class="title">Next »</span>
+    <span class="title">{{ i18n "next_page" }} »</span>
     <br>
-    <span>{{ .Title }}</span>
+    <span>{{- .Name -}}</span>
   </a>
   {{- end }}
 </nav>
