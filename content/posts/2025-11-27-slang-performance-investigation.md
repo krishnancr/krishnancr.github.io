@@ -1,5 +1,5 @@
 ﻿---
-title: "Why Is Slang ~30% Faster on DXR?"
+title: "Investigating Slang's ~30% DXR Speedup"
 date: 2025-11-27T09:00:00Z
 draft: false
 categories: [graphics, rendering, experiments]
@@ -10,7 +10,7 @@ After integrating Slang into ChameleonRT and seeing a ~30% speedup on DXR, I nee
 
 ## TL;DR
 
-**Why was Slang ~30% faster?** After eliminating compiler flags and configuration differences, I traced the improvement to the generated code. Slang's frontend applies optimizations like common subexpression elimination, constant hoisting, redundant load removal before emitting HLSL. DXC then compiles this pre-optimized code. The native HLSL→DXC path doesn't perform these transformations, leaving performance on the table. NSight profiling across multiple scenes confirmed the speedup was real and consistent.
+**What I found:** After eliminating compiler flags and configuration differences, I traced the improvement to the generated code. Slang's frontend appears to apply optimizations (common subexpression elimination, constant hoisting, redundant load removal) before emitting HLSL that DXC then compiles. The native HLSL→DXC path doesn't seem to perform these transformations. NSight profiling showed consistent improvements across multiple scenes, though I can't definitively prove causation.
 
 ## The Unexpected Performance Gap
 
@@ -60,7 +60,7 @@ I'll be honest. Disassembling DXIL and analyzing instruction counts was well out
 
 Using `dxc.exe -dumpbin` on both the native HLSL and Slang-generated DXIL files, I wrote some simple scripts to count specific instruction types. My assumption was that if Slang's backend was truly generating more efficient code, I should see fewer instructions in key categories.
 
-The numbers confirmed it:
+The numbers were striking:
 
 | Metric | HLSL (DXC) | Slang (DXC)| Improvement |
 |--------|----------:|-------------:|------------:|
@@ -138,9 +138,9 @@ float3 disney_microfacet_isotropic_0(DisneyMaterial_0 mat_5, float3 n_12,
 }
 ```
 
-At first glance, Slang's version looks more verbose with all those numbered temporaries (`_S96`, `_S97`, etc.). As I tried to understand why, I realized what was happening. These weren't arbitrary additions. They were deliberate optimizations. I had to look up what some of these techniques were called. Techniques like "common subexpression elimination" and "constant hoisting" weren't part of my daily vocabulary, but the principle was clear: Slang's frontend was recognizing optimization opportunities that I hadn't thought about when writing the code by hand, and DXC wasn't catching when compiling my HLSL.
+At first glance, Slang's version looks more verbose with all those numbered temporaries (`_S96`, `_S97`, etc.). As I tried to understand why, I realized what was happening. These weren't arbitrary additions—they appeared to be deliberate optimizations. I had to look up what some of these techniques were called. Techniques like "common subexpression elimination" and "constant hoisting" weren't part of my daily vocabulary, but the principle seemed clear: Slang's frontend appeared to be recognizing optimization opportunities that I hadn't thought about when writing the code by hand, and that DXC wasn't applying when compiling my HLSL directly.
 
-The instruction count reductions mapped directly to these optimizations. The native HLSL→DXC path compiled my code as written; Slang restructured it first. On Vulkan, improvements were more modest (5-10%)—glslc likely already applies similar optimizations.
+The instruction count reductions seemed to correspond to these optimizations. The native HLSL→DXC path compiled my code as written; Slang appeared to restructure it first. On Vulkan, improvements were more modest (5-10%)—glslc likely already applies similar optimizations.
 
 ## Validating with NSight GPU Profiling
 
@@ -173,7 +173,7 @@ I can see the *correlation* between Slang's optimizations and the speedup, but e
 
 ## Conclusions
 
-The performance gap was real. After eliminating compiler flags and configuration as factors, the difference came down to code. Slang's frontend restructures shaders before downstream compilers ever see them, transformations those compilers probably aren't performing on their own.
+The performance gap appears to be real. After eliminating compiler flags and configuration as factors, the difference seems to come down to code. Slang's frontend appears to restructure shaders before downstream compilers ever see them—transformations those compilers may not be performing on their own.
 
 ### What This Means in Practice
 
