@@ -1,7 +1,7 @@
 ---
 title: "Slang Cross-Vendor Benchmarks: Performance Wins and Trade-offs"
 date: 2026-01-02T09:00:00Z
-draft: true
+draft: false
 categories: [graphics, rendering, experiments]
 tags: [slang, shaders, performance, benchmarking, multi-vendor]
 ---
