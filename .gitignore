@@ -14,3 +14,4 @@ Thumbs.db
 # Editor files
 .vscode/
 .idea/
+tools/macos/hugo
