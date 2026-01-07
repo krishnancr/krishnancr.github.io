@@ -42,6 +42,8 @@ I was able to benchmark across four GPUs:
 - Runs: 5 iterations per configuration
 - Timing: GPU-only (timestamp queries, excluding compilation and CPU overhead)
 
+*Note: All performance measurements in this analysis reflect runtime execution performance only. Shader compilation times are excluded from these benchmarks, as detailed in [Post #2](/posts/2025-11-27-slang-performance-investigation/).*
+
 **Scenes excluded:**
 - **BreakfastRoom**: Setup issues unrelated to Slang
 - **Salle-de-Bain**: High run-to-run variance requiring dedicated investigation
